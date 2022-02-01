@@ -222,7 +222,9 @@ class SimpleArmSim(pyglet.window.Window):
             joint_torque = controller.step_control(None, None, target_acceleration)
 
         # Simulate dynamics
-        q_ddot = np.matmul(np.linalg.inv(M), -(np.matmul(C, self.q_dot.reshape(-1, 1)) + G) + joint_torque).reshape(-1)
+        # q_ddot = np.matmul(np.linalg.inv(M), -(np.matmul(C, self.q_dot.reshape(-1, 1)) + G) + joint_torque).reshape(-1)
+        term2 = np.reshape(joint_torque, (2,1)) - np.matmul(C, np.reshape(self.q_dot,(2,1))) - np.reshape(G, (2,1)) #JP: Add from piazza
+        q_ddot = np.reshape(np.matmul(np.linalg.inv(M), term2), (2,)) #JP: Add from piazza
         self.q_dot = self.q_dot + q_ddot * self.dt
         self.q = self.q + self.q_dot * self.dt
         self.update_frame()

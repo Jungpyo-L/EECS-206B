@@ -88,6 +88,9 @@ class WorkspaceVelocityController(Controller):
         ----------
         desired control input (joint velocities or torques) : 2x numpy array
         """
+        body_velocity = target_velocity
+        joint_velocity = np.matmul(np.linalg.inv(self.sim.J_body_func(self.sim.q, self.sim.q_dot)),body_velocity)
+        return joint_velocity
         pass
 
 
@@ -118,4 +121,14 @@ class JointTorqueController(Controller):
         ----------
         desired control input (joint velocities or torques) : 2x numpy array
         """
+        qdd = target_acceleration
+        qd = self.sim.q_dot
+        q = self.sim.q
+        
+        M = self.sim.M_func(q,qd)
+        C = self.sim.C_func(q,qd)
+        G = self.sim.G_func(q,qd)
+        
+        tau = np.dot(M,qdd) + np.dot(C,qd) + G.T[0]
+        return tau
         pass

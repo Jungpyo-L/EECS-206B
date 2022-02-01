@@ -9,6 +9,8 @@ import argparse
 Set of classes for defining SE(3) trajectories for the end effector of a robot 
 manipulator
 """
+# points for the trajectories
+goal_points = np.array([[5, 0, 0], [10, 0, 0], [3, 3, -2], [7, -1, 1], [5, 0, 0]])
 
 class Trajectory:
 
@@ -48,9 +50,6 @@ class Trajectory:
         Returns the end effector's desired body-frame velocity at time t as a 6D
         twist. Note that this needs to be a rigid-body velocity, i.e. a member 
         of se(3) expressed as a 6D vector.
-
-        The function get_g_matrix from utils may be useful to perform some frame
-        transformations.
 
         Parameters
         ----------
@@ -154,6 +153,9 @@ class LinearTrajectory(Trajectory):
         ----------
         ????? You're going to have to fill these in how you see fit
         """
+        super().__init__(5) # total time
+        self.p0 = goal_points[0]
+        self.p1 = goal_points[1]
         pass
         # Trajectory.__init__(self, ...)
 
@@ -177,6 +179,25 @@ class LinearTrajectory(Trajectory):
         7x' :obj:`numpy.ndarray`
             desired configuration in workspace coordinates of the end effector
         """
+        t = time
+        tl = self.total_time
+        pose = np.array([0, 1, 0, 0])
+        
+        p0 = self.p0
+        p1 = self.p1
+        pd = p1-p0
+        
+        # Method 1: linear velocity profile
+        '''
+        if t <= tl/2:
+            pt = np.array([p0[0] + 2 * pd[0] * (t/tl) ** 2, p0[1] + 2 * pd[1] * (t/tl) ** 2, p0[2] + 2 * pd[2] * (t/tl) ** 2])
+        else:
+            pt = np.array([p0[0] + pd[0] - 2 * pd[0] * (t/tl-1) ** 2, p0[1] + 2 * pd[1] * (t/tl-1) ** 2, p0[2] + pd[2] - 2 * pd[2] * (t/tl-1) ** 2])
+        '''    
+        # Method 2: sinusoidal velocity profile
+        pt = np.array([p0[0] -0.5 * pd[0] * np.cos(np.pi/tl*t) + 0.5 * pd[0], p0[1] -0.5 * pd[1] * np.cos(np.pi/tl*t) + 0.5 * pd[1], p0[2] -0.5 * pd[2] * np.cos(np.pi/tl*t) + 0.5 * pd[2]])
+            
+        return np.concatenate((pt, pose))
         pass
 
     def target_velocity(self, time):
@@ -184,9 +205,6 @@ class LinearTrajectory(Trajectory):
         Returns the end effector's desired body-frame velocity at time t as a 6D
         twist. Note that this needs to be a rigid-body velocity, i.e. a member 
         of se(3) expressed as a 6D vector.
-
-        The function get_g_matrix from utils may be useful to perform some frame
-        transformations.
 
         Parameters
         ----------
@@ -197,11 +215,28 @@ class LinearTrajectory(Trajectory):
         6x' :obj:`numpy.ndarray`
             desired body-frame velocity of the end effector
         """
+        t = time
+        tl = self.total_time
+        p0 = self.p0
+        p1 = self.p1
+        pd = p1-p0
+        
+        # Method 1: linear velocity profile
+        '''
+        if t <= tl/2:
+            vt = np.array([4 * pd[0] / tl ** 2 * t, 4 * pd[1] / tl ** 2 * t, 4 * pd[2] / tl ** 2 * t])
+        else:
+            vt = np.array([-4 * pd[0] / tl ** 2 * (t-tl), -4 * pd[1] / tl ** 2 * (t-tl), -4 * pd[2] / tl ** 2 * (t-tl)])
+        '''
+        # Method 2: sinusoidal velocity profile
+        vt = np.array([np.pi * pd[0] / (2*tl) * np.sin(np.pi/tl*t), np.pi * pd[1] / (2*tl) * np.sin(np.pi/tl*t), np.pi * pd[2] / (2*tl) * np.sin(np.pi/tl*t)])
+
+        return np.concatenate((vt, np.array([0, 0, 0])))
         pass
 
 class CircularTrajectory(Trajectory):
 
-    def __init__(self, center_position, radius, total_time):
+    def __init__(self, center_position = np.array([0, 10, 0]), radius = 3, total_time = 5):
         """
         Remember to call the constructor of Trajectory
 
@@ -209,6 +244,9 @@ class CircularTrajectory(Trajectory):
         ----------
         ????? You're going to have to fill these in how you see fit
         """
+        self.center_position = center_position
+        self.radius = radius
+        self.total_time = total_time
         pass
         # Trajectory.__init__(self, ...)
 
@@ -232,6 +270,16 @@ class CircularTrajectory(Trajectory):
         7x' :obj:`numpy.ndarray`
             desired configuration in workspace coordinates of the end effector
         """
+        t = time
+        tl = self.total_time
+        r = self.radius
+        pose = np.array([0, 1, 0, 0])
+        c = self.center_position
+        omega = np.pi/tl
+        theta = np.pi - np.pi * np.cos(omega*t)
+        
+        pt = np.array([c[0] + r*np.cos(theta), c[1] + r*np.sin(theta), c[2]])
+        return np.concatenate((pt, pose))
         pass
 
     def target_velocity(self, time):
@@ -239,9 +287,6 @@ class CircularTrajectory(Trajectory):
         Returns the end effector's desired body-frame velocity at time t as a 6D
         twist. Note that this needs to be a rigid-body velocity, i.e. a member 
         of se(3) expressed as a 6D vector.
-
-        The function get_g_matrix from utils may be useful to perform some frame
-        transformations.
 
         Parameters
         ----------
@@ -252,10 +297,19 @@ class CircularTrajectory(Trajectory):
         6x' :obj:`numpy.ndarray`
             desired body-frame velocity of the end effector
         """
+        t = time
+        tl = self.total_time
+        r = self.radius
+        omega = np.pi/tl
+        theta = np.pi - np.pi * np.cos(omega*t)
+        
+        vt = np.array([-np.pi * r * omega * np.sin(omega*t) * np.sin(theta),-np.pi * r * omega * np.sin(omega*t) * np.cos(theta), 0])
+        
+        return np.concatenate((vt, np.array([0, 0, 0])))
         pass
 
 class PolygonalTrajectory(Trajectory):
-    def __init__(self, points, total_time):
+    def __init__(self, points = goal_points, total_time = 15):
         """
         Remember to call the constructor of Trajectory.
         You may wish to reuse other trajectories previously defined in this file.
@@ -265,6 +319,18 @@ class PolygonalTrajectory(Trajectory):
         ????? You're going to have to fill these in how you see fit
 
         """
+        self.linear = LinearTrajectory()
+        self.points = points
+        self.total_time = total_time
+        self.n = len(points) # number of points
+        self.t_chunk = np.zeros(self.n)
+        self.l_chunk = np.zeros(self.n-1)
+        for i in range(0, self.n - 1):
+            self.l_chunk[i] = np.linalg.norm(self.points[i+1] - self.points[i])
+        
+        for i in range(0, self.n - 1):
+            self.t_chunk[i+1] = self.t_chunk[i] + self.l_chunk[i] / np.sum(self.l_chunk) * self.total_time
+        self.t_chunk[self.n-1] = self.total_time
         pass
         # Trajectory.__init__(self, total_time)
 
@@ -288,6 +354,13 @@ class PolygonalTrajectory(Trajectory):
         7x' :obj:`numpy.ndarray`
             desired configuration in workspace coordinates of the end effector
         """
+        t = time
+        for i in range(0, self.n - 1):
+            if t >= self.t_chunk[i] and t <= self.t_chunk[i+1]:
+                self.linear.total_time = self.t_chunk[i+1] - self.t_chunk[i]
+                self.linear.p0 = self.points[i]
+                self.linear.p1 = self.points[i+1]
+                return self.linear.target_pose(t-self.t_chunk[i])
         pass
         
     def target_velocity(self, time):
@@ -295,9 +368,6 @@ class PolygonalTrajectory(Trajectory):
         Returns the end effector's desired body-frame velocity at time t as a 6D
         twist. Note that this needs to be a rigid-body velocity, i.e. a member 
         of se(3) expressed as a 6D vector.
-
-        The function get_g_matrix from utils may be useful to perform some frame
-        transformations.
 
         Parameters
         ----------
@@ -308,6 +378,14 @@ class PolygonalTrajectory(Trajectory):
         6x' :obj:`numpy.ndarray`
             desired body-frame velocity of the end effector
         """
+        t = time
+        
+        for i in range(0, self.n - 1):
+            if t >= self.t_chunk[i] and t <= self.t_chunk[i+1]:
+                self.linear.total_time = self.t_chunk[i+1] - self.t_chunk[i]
+                self.linear.p0 = self.points[i]
+                self.linear.p1 = self.points[i+1]
+                return self.linear.target_velocity(t-self.t_chunk[i])
         pass
 
 def define_trajectories(args):
